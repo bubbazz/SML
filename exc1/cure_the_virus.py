@@ -1,5 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
+import math
 
 
 def iterate(n):
@@ -27,17 +28,29 @@ def plotGenerations(slist, n):
     plt.show()
 
 
-n = 18
-slist = iterate(n)
-plotGenerations(slist, n)
+# n = 18
+# slist = iterate(n)
+# plotGenerations(slist, n)
 
-n = 1000
-slist = iterate(n)
-plotGenerations(slist, n)
-
+# n = 1000
+# slist = iterate(n)
+# plotGenerations(slist, n)
 
 def eigenvalues():
     markov_chain_matrix = np.array([[0.42, 0.026], [0.58, 0.974]])
+    print(markov_chain_matrix, markov_chain_matrix.T)
     lamb, vec = np.linalg.eig(markov_chain_matrix)
     print("eigenvalue_1 :" + str(lamb[1]) +
           "\neigenvector_1 : " + str(vec[:, 1]))
+    # analitically calculated values
+    wolfram_mat = [13/290, 1]
+    stochastical_norm = sum([x for x in wolfram_mat])
+    wolfram_mat_normed = (1/stochastical_norm)*np.array(wolfram_mat)
+    print("normed calc:" + str(wolfram_mat_normed))
+    markov_chain_matrix = markov_chain_matrix.T
+    n = 10000
+    x = np.linalg.matrix_power(markov_chain_matrix, n)
+    print(n, x)
+
+
+eigenvalues()
