@@ -96,7 +96,7 @@ def plot_learning_rate(learning_rate, learning_rate_fix):
     plt.ylabel("f(x)")
     plt.plot(learning_rate)
     plt.plot(learning_rate_fix)
-    plt.legend(["$t = backtrack(x, \\Delta f(x))$", f"$t = {t_fix}$"])
+    plt.legend(["$t = backtrack(x, \\nabla f(x))$", f"$t = {t_fix}$"])
     # plt.yscale("log")
     plt.savefig("Ex2_Task1_GD_Plot.png")
     plt.show()
