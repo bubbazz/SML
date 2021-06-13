@@ -18,6 +18,7 @@ t = [1, 3, 5, 10, 30]
 # see https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.scatter.html
 colors_transparent = ['#1f77b422', '#2ca02c22', '#d6272822']
 colors = ['#1f77b4ff', '#2ca02cff', '#d62728ff']
+log_likelihoods = []
 
 
 def Expectation(means, covs, mix_coefs, X):
@@ -85,6 +86,20 @@ def nearest(means, data):
     return points
 
 
+def multi_gauss(x, mean, cov):
+    gauss = 0.0
+
+    cov_det = np.linalg.det(cov)
+    cov_inv = np.linalg.inv(cov)
+
+    norm = (1.0 / np.sqrt((2 * np.pi) ** 2 * cov_det))
+    v = np.array(x - mean).reshape((2, 1))
+    gauss += np.exp(-0.5 * v.T @ cov_inv @ v)
+    gauss *= norm
+
+    return gauss
+
+
 def EMAlgo(means, covs, mix_coefs, steps):
     struc = {"mean": [means],
              "covs": [covs],
@@ -95,6 +110,18 @@ def EMAlgo(means, covs, mix_coefs, steps):
         struc["mean"].append(means)
         struc["covs"].append(covs)
         struc["mix_coefs"].append(mix_coefs)
+
+        log_likelihood = 0.0
+        for k in range(len(data)):
+            ll = 0.0
+            for idx in range(N):
+                likelihood = mix_coefs[idx] * multi_gauss(data[k], means[idx], covs[idx])
+                if likelihood == 0.0:
+                    likelihood = 1e-11
+                ll += likelihood
+            log_likelihood += np.log(ll).item()
+        log_likelihoods.append(log_likelihood)
+
         if i in t:
             plt.title(f"t = {i}")
             points = nearest(means, data)
@@ -104,6 +131,12 @@ def EMAlgo(means, covs, mix_coefs, steps):
                 plt.scatter(means[j][0],
                             means[j][1], marker="x", c=colors[j])
             plt.show()
+
+    plt.title("Log-Likelihoods")
+    plt.xlabel("t")
+    plt.ylabel("$L(\\theta)$")
+    plt.plot(log_likelihoods)
+    plt.show()
     return
 
 
