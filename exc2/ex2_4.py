@@ -3,24 +3,20 @@ import matplotlib.pyplot as plt
 
 
 def main():
-    train_file = open("dataSets/nonParamTrain.txt")
-    train_data = np.array(train_file.readlines()).astype(np.float)
-
-    test_file = open("dataSets/nonParamTest.txt")
-    test_data = np.array(test_file.readlines()).astype(np.float)
+    train_data = np.loadtxt("dataSets/nonParamTrain.txt")
+    test_data = np.loadtxt("dataSets/nonParamTest.txt")
 
     print("== Train Data =======")
     histogram(train_data)
     kde(train_data)
     knn(train_data)
 
-    # d) TODO: table
     print("== Test Data =======")
     kde(test_data)
+    knn(test_data)
 
 
 def histogram(data):
-
     plt.subplot(311)
     plt.hist(data, bins=np.arange(data.min(), data.max(), 0.2))
     plt.title("Histograms")
@@ -41,20 +37,25 @@ def histogram(data):
 def kde(data):
     print("\t KDE")
 
-    def V(h):
+    def gauss_norm_factor(h):
         d = 1
         return np.sqrt(2 * np.pi * h * h) ** d
 
-    N = len(data)
+    # Log-likelihoods
+    N_ll = len(data)
+    kde_1_ll = [gauss_kernel(x, 0.03, data) / (N_ll * gauss_norm_factor(0.03)) for x in data]
+    kde_2_ll = [gauss_kernel(x, 0.2, data) / (N_ll * gauss_norm_factor(0.2)) for x in data]
+    kde_3_ll = [gauss_kernel(x, 0.8, data) / (N_ll * gauss_norm_factor(0.8)) for x in data]
+    print("L(0.03) = ", np.sum(np.log(list(map(lambda x: 1e-11 if x == 0 else x, kde_1_ll)))))
+    print("L(0.2) = ", np.sum(np.log(list(map(lambda x: 1e-11 if x == 0 else x, kde_2_ll)))))
+    print("L(0.8) = ", np.sum(np.log(list(map(lambda x: 1e-11 if x == 0 else x, kde_3_ll)))))
+
+    N = 1000
     x_vals = np.linspace(-4, 8, N)
 
-    kde_1 = [gauss_kernel(x, 0.03, data) / (N * V(0.03)) for x in x_vals]
-    kde_2 = [gauss_kernel(x, 0.2, data) / (N * V(0.2)) for x in x_vals]
-    kde_3 = [gauss_kernel(x, 0.8, data) / (N * V(0.8)) for x in x_vals]
-
-    print("L(0.03) = ", np.sum(np.log(list(filter(lambda x: x != 0.0, kde_1)))))
-    print("L(0.2) = ", np.sum(np.log(list(filter(lambda x: x != 0.0, kde_2)))))
-    print("L(0.8) = ", np.sum(np.log(list(filter(lambda x: x != 0.0, kde_3)))))
+    kde_1 = [gauss_kernel(x, 0.03, data) / (N * gauss_norm_factor(0.03)) for x in x_vals]
+    kde_2 = [gauss_kernel(x, 0.2, data) / (N * gauss_norm_factor(0.2)) for x in x_vals]
+    kde_3 = [gauss_kernel(x, 0.8, data) / (N * gauss_norm_factor(0.8)) for x in x_vals]
 
     plt.plot(x_vals, kde_1)
     plt.plot(x_vals, kde_2)
@@ -68,29 +69,29 @@ def kde(data):
 
 
 def gauss_kernel(x, h, data):
-    d = 1  # TODO what is d?
     accum = 0.0
     for x_i in data:
-        # left = (1 / (np.sqrt(2 * np.pi * h * h) ** d))
-        left = 1
-        right = np.exp(-(np.linalg.norm(x - x_i) ** 2) / (2 * h * h))
-        accum += left * right
+        accum += np.exp(-(np.linalg.norm(x - x_i) ** 2) / (2 * h * h))
     return accum
 
 
 def knn(data):
     print("\t kNN")
 
-    N = len(data)
+    # log-likelihoods
+    knn_1_ll = [knn_kernel(x, 2, data) for x in data]
+    knn_2_ll = [knn_kernel(x, 8, data) for x in data]
+    knn_3_ll = [knn_kernel(x, 35, data) for x in data]
+    print("L(2) = ", np.sum(np.log(list(map(lambda x: 1e-11 if x == 0 else x, knn_1_ll)))))
+    print("L(8) = ", np.sum(np.log(list(map(lambda x: 1e-11 if x == 0 else x, knn_2_ll)))))
+    print("L(35) = ", np.sum(np.log(list(map(lambda x: 1e-11 if x == 0 else x, knn_3_ll)))))
+
+    N = 1000
     x_vals = np.linspace(-4, 8, N)
 
     knn_1 = [knn_kernel(x, 2, data) for x in x_vals]
     knn_2 = [knn_kernel(x, 8, data) for x in x_vals]
     knn_3 = [knn_kernel(x, 35, data) for x in x_vals]
-
-    print("L(2) = ", np.sum(np.log(list(filter(lambda x: x != 0.0, knn_1)))))
-    print("L(8) = ", np.sum(np.log(list(filter(lambda x: x != 0.0, knn_2)))))
-    print("L(35) = ", np.sum(np.log(list(filter(lambda x: x != 0.0, knn_3)))))
 
     plt.plot(x_vals, knn_1)
     plt.plot(x_vals, knn_2)
@@ -105,10 +106,8 @@ def knn(data):
 
 def knn_kernel(x, K, data):
     N = len(data)
-    neighbors = np.sort(np.array([np.abs(x - x_i) for x_i in data]))[:K]    # Contains line lengths
-    V = np.max(neighbors) - np.min(neighbors)   # TODO: this is wrong
-    V = neighbors   # A bit better but not sure if right
-    return K / (N * 2 * V[K - 1])
+    V = np.sort(np.array([np.abs(x - x_i) for x_i in data]))   # Contains line lengths
+    return K / (N * 2 * V[K])
 
 
 if __name__ == "__main__":
