@@ -13,10 +13,10 @@ def main():
     y_test = test_data[:, 1]
 
     # a) Linear Features
-    a(x_train, y_train, x_test, y_test)
+    # a(x_train, y_train, x_test, y_test)
 
     # b) Polynomial Features
-    b(x_train, y_train, x_test, y_test)
+    # b(x_train, y_train, x_test, y_test)
 
     # c) Bayesian Linear Regression
     c(x_train, y_train, x_test, y_test)
@@ -103,6 +103,9 @@ def c(x, y, x_test, y_test):
     sigma = 0.1
     ridge = 0.01
 
+    alpha = 0.01                # alpha = lambda
+    beta = 1.0 / (sigma ** 2)   # beta^-1 is the variance; sigma is std; sigma^2 = beta^-1; beta=beta^-1=(sigma^2)^-1
+
     x = x.reshape((len(x), 1))
     y = y.reshape((len(y), 1))
     x_test = x_test.reshape((len(x_test), 1))
@@ -111,49 +114,66 @@ def c(x, y, x_test, y_test):
     X = np.hstack((x, np.ones_like(x))).T
     X_test = np.hstack((x_test, np.ones_like(x_test))).T
 
+    print("X = ", X.shape)
+
+    I = np.identity(2)
+
     # Prior
     m0 = np.zeros_like(X)
     Lambda0 = ridge * np.identity(2)
 
     # Posterior
-    print(X.shape, y.shape)
-    print(Lambda0.shape, m0.shape, (X @ y).shape)
+    # print(X.shape, y.shape)
+    # print(Lambda0.shape, m0.shape, (X @ y).shape)
     LambdaN = np.linalg.inv(np.linalg.inv(Lambda0) + (sigma ** -2) * X @ X.T)
-    print(LambdaN.shape, m0.shape)
-    mN = LambdaN @ (np.linalg.inv(Lambda0) @ m0 + (sigma ** 2) * X @ y)     # TODO: is ~= 0 for some reason
-    # print("Gauss = \n", gaussian(X, mN, LambdaN).shape)  # Do we even need this? Only mean/cov suffices?
+    # # print(LambdaN.shape, m0.shape)
+    mN = LambdaN @ (np.linalg.inv(Lambda0) @ m0 + (sigma ** -2) * X @ y)
 
     # Predictive (what is x*?)
-    pred_mean = X.T @ np.linalg.inv(X @ X.T + ridge * np.identity(2)) @ X @ y
-    print(pred_mean.shape)
+    pred_mean = np.array([x @ np.linalg.inv(X @ X.T + (alpha / beta) * I) @ X @ y for x in X.T])
+    pred_var = np.array([(1 / beta) + x.T @ np.linalg.inv(beta * X @ X.T + alpha * I) @ x for x in X.T])
 
+    pred_mean_test = np.array([x @ np.linalg.inv(X @ X.T + (alpha / beta) * I) @ X @ y for x in X_test.T])
+    pred_var_test = np.array([(1 / beta) + x.T @ np.linalg.inv(beta * X @ X.T + alpha * I) @ x for x in X_test.T])
+    print(pred_mean.shape, pred_var.shape)
+
+    print(X_test.shape, y_test.shape, pred_mean_test.shape)
     print("RMSE (Train): ", rmse(y, pred_mean))
-    print("RMSE (Test): ", rmse(y_test, X_test.T @ np.linalg.inv(X @ X.T + ridge * np.identity(2)) @ X @ y))
+    print("RMSE (Test): ", rmse(y_test, pred_mean_test))
 
     # Plot
-    plt.scatter(x, y, color="black")
+    x_tmp, pred_mean = polynomial(x.flatten(), pred_mean.flatten(), 1)
+    _, pred_var = polynomial(x.flatten(), pred_var.flatten(), 1)
 
-    x, pred_mean = polynomial(x.flatten(), pred_mean.flatten(), 1)
-    plt.plot(x, pred_mean, color="blue")
+    x_tmp, pred_mean_test = polynomial(x_test.flatten(), pred_mean_test.flatten(), 1)
+    _, pred_var_test = polynomial(x_test.flatten(), pred_var_test.flatten(), 1)
 
+    plt.plot(x_tmp, pred_mean, color="blue")
+
+    std_dev = np.sqrt(pred_var_test)
+    pred_mean = pred_mean_test.flatten()
     plt.fill_between(
-        x=x.flatten(),
-        y1=pred_mean.flatten() - (2 * sigma),
-        y2=pred_mean.flatten() + (2 * sigma),
+        x=x_tmp.flatten(),
+        y1=pred_mean - (1 * std_dev),
+        y2=pred_mean + (1 * std_dev),
         alpha=0.8,
         color="royalblue")
     plt.fill_between(
-        x=x.flatten(),
-        y1=pred_mean.flatten() - (3 * sigma),
-        y2=pred_mean.flatten() + (3 * sigma),
+        x=x_tmp.flatten(),
+        y1=pred_mean - (2 * std_dev),
+        y2=pred_mean + (2 * std_dev),
         alpha=0.5,
         color="cornflowerblue")
     plt.fill_between(
-        x=x.flatten(),
-        y1=pred_mean.flatten() - (4 * sigma),
-        y2=pred_mean.flatten() + (4 * sigma),
+        x=x_tmp.flatten(),
+        y1=pred_mean - (3 * std_dev),
+        y2=pred_mean + (3 * std_dev),
         alpha=0.25,
         color="lightsteelblue")
+
+    plt.scatter(x, y, color="black", label="Train")
+    plt.scatter(x_test, y_test, color="red", label="Test")
+    plt.legend()
     plt.show()
 
 
@@ -161,16 +181,17 @@ def c(x, y, x_test, y_test):
 def d(x, y, x_test, y_test):
     print("\n== Squared Exponential Features ========")
 
-    # TODO: figure out relationship between alpha, beta, sigma, and lambda ... for now just use lambda as alpha/beta
     sigma = 0.1
     ridge = 0.01
 
     n = len(x)
+    n_test = len(x_test)
     k = 20
     beta = 10
     alpha = np.array([j * 0.1 - 1 for j in range(k)])
     F = np.empty((n, k), dtype=float)
-    F_test = np.empty((n, k), dtype=float)
+    F_test = np.empty((n_test, k), dtype=float)
+    I = np.identity(k)
 
     x = x.reshape((len(x), 1))
     y = y.reshape((len(y), 1))
@@ -180,6 +201,9 @@ def d(x, y, x_test, y_test):
     for i in range(n):
         for j in range(k):
             F[i][j] = np.exp(-0.5 * beta * (x[i] - alpha[j]) ** 2)
+
+    for i in range(n_test):
+        for j in range(k):
             F_test[i][j] = np.exp(-0.5 * beta * (x_test[i] - alpha[j]) ** 2)
 
     X = F.T
@@ -191,40 +215,50 @@ def d(x, y, x_test, y_test):
 
     # Posterior
     LambdaN = np.linalg.inv(np.linalg.inv(Lambda0) + (sigma ** -2) * X @ X.T)
-    mN = LambdaN @ (np.linalg.inv(Lambda0) @ m0 + (sigma ** 2) * X @ y)     # TODO: is ~= 0 for some reason
+    mN = LambdaN @ (np.linalg.inv(Lambda0) @ m0 + (sigma ** -2) * X @ y)
 
-    # Predictive (what is x*?)
-    pred_mean = X.T @ np.linalg.inv(X @ X.T + ridge * np.identity(k)) @ X @ y
-    pred_var = (1.0 / beta) + X.T @ np.linalg.inv(beta * X @ X.T + alpha * np.identity(k)) @ X
-    print(X.shape, X_test.shape, y.shape, pred_mean.shape, pred_var.shape)
+    # Predictive
+    pred_mean = np.array([x @ np.linalg.inv(X @ X.T + (alpha / beta) * I) @ X @ y for x in X.T])
+    pred_var = np.array([(1 / beta) + x.T @ np.linalg.inv(beta * X @ X.T + alpha * I) @ x for x in X.T])
 
-    # print("RMSE (Train): ", rmse(y, pred_mean))
-    # print("RMSE (Test): ", rmse(y_test, X_test.T @ np.linalg.inv(X @ X.T + ridge * np.identity(2)) @ X @ y))
+    pred_mean_test = np.array([x @ np.linalg.inv(X @ X.T + (alpha / beta) * I) @ X @ y for x in X_test.T])
+    pred_var_test = np.array([(1 / beta) + x.T @ np.linalg.inv(beta * X @ X.T + alpha * I) @ x for x in X_test.T])
+
+    print("RMSE (Train): ", rmse(y, pred_mean))
+    print("RMSE (Test): ", rmse(y_test, pred_mean_test))
 
     # Plot
-    plt.scatter(x, y, color="black")
+    x_tmp, pred_mean = polynomial(x.flatten(), pred_mean.flatten(), k)
+    _, pred_var = polynomial(x.flatten(), pred_var.flatten(), k)
 
-    x, pred_mean = polynomial(x.flatten(), pred_mean.flatten(), k)
-    plt.plot(x, pred_mean, color="blue")
+    x_tmp, pred_mean_test = polynomial(x_test.flatten(), pred_mean_test.flatten(), k)
+    _, pred_var_test = polynomial(x_test.flatten(), pred_var_test.flatten(), k)
+    plt.plot(x_tmp, pred_mean, color="blue")
 
+    std_dev = np.sqrt(pred_var_test)
+    pred_mean = pred_mean_test.flatten()
     plt.fill_between(
-        x=x.flatten(),
-        y1=pred_mean.flatten() - (2 * sigma),
-        y2=pred_mean.flatten() + (2 * sigma),
+        x=x_tmp.flatten(),
+        y1=pred_mean - (1 * std_dev),
+        y2=pred_mean + (1 * std_dev),
         alpha=0.8,
         color="royalblue")
     plt.fill_between(
-        x=x.flatten(),
-        y1=pred_mean.flatten() - (3 * sigma),
-        y2=pred_mean.flatten() + (3 * sigma),
+        x=x_tmp.flatten(),
+        y1=pred_mean - (2 * std_dev),
+        y2=pred_mean + (2 * std_dev),
         alpha=0.5,
         color="cornflowerblue")
     plt.fill_between(
-        x=x.flatten(),
-        y1=pred_mean.flatten() - (4 * sigma),
-        y2=pred_mean.flatten() + (4 * sigma),
+        x=x_tmp.flatten(),
+        y1=pred_mean - (3 * std_dev),
+        y2=pred_mean + (3 * std_dev),
         alpha=0.25,
         color="lightsteelblue")
+
+    plt.scatter(x, y, color="black", label="Train")
+    plt.scatter(x_test, y_test, color="red", label="Test")
+    plt.legend()
     plt.show()
 
 
